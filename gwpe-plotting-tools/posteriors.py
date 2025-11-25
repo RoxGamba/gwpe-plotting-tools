@@ -1,244 +1,42 @@
 """
 Useful functions for plotting results of PE.
-
-Adapted from RG's script.
 """
 
+from scipy.stats import gaussian_kde
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
-import h5py
-import sys
-sys.path.append('./figure_scripts')
-import figure_scripts.corner as corner
-# from pesummary.core.plots.publication import _triangle_plot, _triangle_axes
-# Use custom modified version of pesummary.publication for greater control of aesthetical details
-from figure_scripts.publication import _triangle_plot, _triangle_axes
-import json
-from scipy.stats import gaussian_kde
+import gwutils
+import corner
+from pesummary.core.plots.publication import _triangle_plot, _triangle_axes
 
-import seaborn as sns
-from bilby.gw.prior import BBHPriorDict
-from bilby.gw.result import CBCResult
-
-# set colormap to colorblind
-
-# Colors for scripts
-p_green  = (0.0, 0.6078431372549019, 0.6196078431372549)
-p_pink   = (0.7803921568627451, 0.36470588235294116, 0.6705882352941176)
-p_purple = (0.2, 0.13333333333333333, 0.5333333333333333)
+try:
+    from bilby.gw.prior import BBHPriorDict
+    from bilby.gw.result import CBCResult
+except ImportError:
+    logging.warning("bilby not found, bilby-related functions will not work")
 
 # use latex for the labels
 plt.rc("text", usetex=True)
 plt.rc("font", family="serif", size=13)
 
 
-def compute_chi_prec(m1, m2, s1, s2, tilt1, tilt2):
-    """Compute chi precessing spin parameter (for given 3-dim spin vectors)
-    --------
-    m1 = primary mass component [solar masses]
-    m2 = secondary mass component [solar masses]
-    s1 = primary spin megnitude [dimensionless]
-    s2 = secondary spin megnitude [dimensionless]
-    tilt1 = primary spin tilt [rad]
-    tilt2 = secondary spin tilt [rad]
-    """
-
-    s1_perp = np.abs(s1 * np.sin(tilt1))
-    s2_perp = np.abs(s2 * np.sin(tilt2))
-    one_q = m2 / m1
-
-    # check that m1>=m2, otherwise switch
-    if one_q > 1.0:
-        one_q = 1.0 / one_q
-        s1_perp, s2_perp = s2_perp, s1_perp
-
-    return np.max(
-        [s1_perp, s2_perp * one_q * (4.0 * one_q + 3.0) / (3.0 * one_q + 4.0)]
-    )
-
-
-def compute_chi_prec_from_xyz(q, chi1x, chi1y, chi2x, chi2y):
-    """
-    Compute chi_p given spin components
-    """
-
-    chi1_perp = np.sqrt(chi1x**2 + chi1y**2)
-    chi2_perp = np.sqrt(chi2x**2 + chi2y**2)
-
-    if q < 1.0:
-        chi1_perp, chi2_perp = chi2_perp, chi1_perp
-        q = 1.0 / q
-
-    return np.maximum(chi1_perp, (4.0 + 3.0 * q) / (4.0 * q**2 + 3.0 * q) * chi2_perp)
-
-
 class Posterior(object):
-    def __init__(self, filename, kind):
-
-        if "bilby" in kind:
-            self.load_bilby(filename, kind)
-        elif kind == "o3a-hdf5":
-            self.load_o3a_hdf5(filename)
-        elif kind == "gwtc1":
-            self.load_gwtc1(filename)
-        elif kind == "rift":
-            self.load_rift(filename)
-        elif kind == "txt":
-            self.load_txt(filename)
-        else:
-            raise ValueError("Unknown file type")
-
-    def load_gwtc1(self, filename):
-        data_gwtc = h5py.File(filename, "r")
-        m1 = data_gwtc["Overall_posterior"]["m1_detector_frame_Msun"][:]
-        m2 = data_gwtc["Overall_posterior"]["m2_detector_frame_Msun"][:]
-        Dl = data_gwtc["Overall_posterior"]["luminosity_distance_Mpc"][:]
-        M = m1 + m2
-        q = m2 / m1
-        Mc = M * (q / (1 + q) / (1 + q)) ** (3.0 / 5.0)
-        s1 = data_gwtc["Overall_posterior"]["spin1"][:]
-        s2 = data_gwtc["Overall_posterior"]["spin2"][:]
-        ct1 = data_gwtc["Overall_posterior"]["costilt1"][:]
-        ct2 = data_gwtc["Overall_posterior"]["costilt2"][:]
-        tilt1 = np.arccos(ct1)
-        tilt2 = np.arccos(ct2)
-        chi1z = s1 * ct1
-        chi2z = s2 * ct2
-
-        # compute chip and
-        chip = [
-            compute_chi_prec(m1i, m2i, s1i, s2i, tilt1i, tilt2i)
-            for m1i, m2i, s1i, s2i, tilt1i, tilt2i in zip(m1, m2, s1, s2, tilt1, tilt2)
-        ]
-        chip = np.array(chip)
-        chi_eff = np.array((m1 * chi1z + m2 * chi2z) / M)
-
-        self.__setattr__(
-            "cos_theta_jn", data_gwtc["Overall_posterior"]["costheta_jn"][:]
-        )
-        self.__setattr__("mass_ratio", q)
-        self.__setattr__("chirp_mass", Mc)
-        self.__setattr__("a_1", s1)
-        self.__setattr__("a_2", s2)
-        self.__setattr__("chi_eff", chi_eff)
-        self.__setattr__("chi_p", chip)
-        self.__setattr__("luminosity_distance", Dl)
-
-    def load_o3a_hdf5(self, filename):
-        data = h5py.File(filename, "r")
-        default_keys = [
-            "mass_ratio",
-            "chirp_mass",
-            "a_1",
-            "a_2",
-            "luminosity_distance",
-            "iota",
-            "cos_theta_jn",
-            "chi_eff",
-            "chi_1",
-            "chi_2",
-            "chi_p",
-            "log_likelihood",
-        ]
-
-        for this_key in default_keys:
-            try:
-                self.__setattr__(
-                    this_key, data["ProdF4"]["posterior_samples"][this_key][:]
-                )
-            except Exception:
-                continue
-                # print(f"Key {this_key} not found in {filename}")
-
-    def load_rift(self, filename):
-        with open(filename, "r") as f:
-            data = np.genfromtxt(f, names=True)
-
-        # m1 m2 a1x a1y a1z a2x a2y a2z mc eta  ra dec time phiorb incl psi
-        # distance Npts lnL p ps neff  mtotal q chi_eff chi_p  m1_source m2_source mc_source
-        # mtotal_source redshift  eccentricity meanPerAno
-        # rift to bilby
-        rift_to_bilby = {
-            "m1": "mass_1",
-            "m2": "mass_2",
-            "a1x": "spin_1x",
-            "a1y": "spin_1y",
-            "a1z": "spin_1z",
-            "a2x": "spin_2x",
-            "a2y": "spin_2y",
-            "a2z": "spin_2z",
-            "mc": "chirp_mass",
-            "eta": "symmetric_mass_ratio",  # CHECKME
-            "ra": "ra",
-            "dec": "dec",
-            "time": "geocent_time",
-            "phiorb": "phase",
-            "incl": "iota",
-            "psi": "psi",
-            "distance": "luminosity_distance",
-            "Npts": "npts",
-            "lnL": "log_likelihood",
-            "p": "p",
-            "ps": "ps",
-            "neff": "neff",
-            "mtotal": "total_mass",
-            "q": "mass_ratio",
-            "chi_eff": "chi_eff",
-            "chi_p": "chi_p",
-            "m1_source": "mass_1_source",
-            "m2_source": "mass_2_source",
-            "mc_source": "chirp_mass_source",
-            "mtotal_source": "total_mass_source",
-            "redshift": "redshift",
-            "eccentricity": "eccentricity",
-            "meanPerAno": "mean_per_ano",
-        }
-
-        for name in data.dtype.names:
-            try:
-                self.__setattr__(rift_to_bilby[name], data[name])
-            except Exception:
-                print("Problem with key: ", name)
-                continue
-                # print(f"Key {name} not found in {filename}")
-
-    def load_bilby(self, filename, kind):
-        if "json" in kind:
-            result = CBCResult.from_json(filename)
-        elif "hdf5" in kind:
-            result = CBCResult.from_hdf5(filename)
-        elif "pkl" in kind:
-            result = CBCResult.from_pkl(filename)
-        else:
-            raise ValueError("Unknown bilby file type")
-
-        posterior = result.posterior
-        prior = result.priors
-
-        self.log_bayes_factor = result.log_bayes_factor
-
-        for this_key in posterior.keys():
-            try:
-                self.__setattr__(this_key, posterior[this_key])
-            except Exception:
-                continue
-                # print(f"Key {this_key} not found in {filename}")
-
-        for this_key in prior.keys():
-            try:
-                self.__setattr__(this_key + "-prior", prior[this_key])
-            except Exception:
-                continue
-
+    def __init__(self, filename):
+        self.filename = filename
         pass
 
-    def load_txt(self, filename):
-        data = np.genfromtxt(filename, names=True, dtype=float)
-        for key in data.dtype.names:
-            self.__setattr__(key, data[key])
-        pass
-
-    def make_hist(self, key, color, fig=None, bins=None, label=None, truth=None, percentiles=None, **kwargs):
+    def make_hist(
+        self,
+        key,
+        color,
+        fig=None,
+        bins=None,
+        label=None,
+        truth=None,
+        percentiles=None,
+        **kwargs,
+    ):
         data = self.__getattribute__(key)
         if fig is None:
             fig = plt.figure(figsize=(6, 4))
@@ -249,13 +47,21 @@ class Posterior(object):
         if bins is None:
             bins = int(np.sqrt(len(data)))
 
-        ax.hist(data, density=True, histtype="step", bins=bins, color=color, label=label, **kwargs)
+        ax.hist(
+            data,
+            density=True,
+            histtype="step",
+            bins=bins,
+            color=color,
+            label=label,
+            **kwargs,
+        )
         if truth is not None:
-            ax.axvline(truth, color='k', linestyle='--')
+            ax.axvline(truth, color="k", linestyle="--")
         if percentiles is not None:
             percs = np.percentile(data, percentiles)
-            ax.axvline(percs[0], lw=1.25, ls='--', color=color)
-            ax.axvline(percs[1], lw=1.25, ls='--', color=color)
+            ax.axvline(percs[0], lw=1.25, ls="--", color=color)
+            ax.axvline(percs[1], lw=1.25, ls="--", color=color)
         return fig
 
     def find_maxL(self):
@@ -315,7 +121,7 @@ class Posterior(object):
         N=1000,
         truth=None,
         percentiles=None,
-        figsize=(5,5),
+        figsize=(5, 5),
         grid=False,
         **kde_args,
     ):
@@ -342,7 +148,8 @@ class Posterior(object):
             ylabel=labels[1],
             colors=[color],
             labels=[label],
-            fill=fill, fill_alpha=0.25,
+            fill=fill,
+            fill_alpha=0.25,
             plot_density=plot_density,
             fig=fig,
             axes=(ax1, ax2, ax3),
@@ -353,20 +160,20 @@ class Posterior(object):
         if percentiles is not None:
             assert len(percentiles) == 2
             percs = np.percentile(posts[0], percentiles)
-            ax1.axvline(percs[0], lw=1.25, ls='--', color=color)
-            ax1.axvline(percs[1], lw=1.25, ls='--', color=color)
+            ax1.axvline(percs[0], lw=1.25, ls="--", color=color)
+            ax1.axvline(percs[1], lw=1.25, ls="--", color=color)
             percs = np.percentile(posts[1], percentiles)
-            ax3.axhline(percs[0], lw=1.25, ls='--', color=color)
-            ax3.axhline(percs[1], lw=1.25, ls='--', color=color)
+            ax3.axhline(percs[0], lw=1.25, ls="--", color=color)
+            ax3.axhline(percs[1], lw=1.25, ls="--", color=color)
         # Also manually add truth lines
         if truth is not None:
-            ax1.axvline(truth[0], lw=0.5, ls='-.', color='k')
-            ax3.axhline(truth[1], lw=0.5, ls='-.', color='k')
-            ax2.axvline(truth[0], lw=0.5, ls='-.', color='k')
-            ax2.axhline(truth[1], lw=0.5, ls='-.', color='k')
-            ax2.scatter(truth[0], truth[1], marker='s', s=25, c='k', zorder=10)
+            ax1.axvline(truth[0], lw=0.5, ls="-.", color="k")
+            ax3.axhline(truth[1], lw=0.5, ls="-.", color="k")
+            ax2.axvline(truth[0], lw=0.5, ls="-.", color="k")
+            ax2.axhline(truth[1], lw=0.5, ls="-.", color="k")
+            ax2.scatter(truth[0], truth[1], marker="s", s=25, c="k", zorder=10)
         if grid:
-            ax2.grid(alpha=0.75, ls=':')
+            ax2.grid(alpha=0.75, ls=":")
 
         return fig, [ax1, ax2, ax3]
 
@@ -428,6 +235,140 @@ class Posterior(object):
                         )
 
         return fig, axes
+
+
+class BilbyPosterior(Posterior):
+    def __init__(self, filename):
+        """
+        Initialize the BilbyPosterior class.
+        filename: name of the file containing the posterior samples
+        kind: type of the file (bilby-json, bilby-hdf5, bilby-pkl, o3a-hdf5)
+        """
+        super().__init__(filename)
+        self.load(filename)
+        pass
+
+    def load_bilby(self, filename):
+
+        if "json" in filename:
+            result = CBCResult.from_json(filename)
+        elif "hdf5" in filename:
+            result = CBCResult.from_hdf5(filename)
+        elif "pkl" in filename:
+            result = CBCResult.from_pkl(filename)
+        else:
+            raise ValueError("Unknown bilby file type")
+
+        posterior = result.posterior
+        prior = result.priors
+
+        self.log_bayes_factor = result.log_bayes_factor
+
+        for this_key in posterior.keys():
+            try:
+                self.__setattr__(this_key, posterior[this_key])
+            except Exception:
+                continue
+                # print(f"Key {this_key} not found in {filename}")
+
+        for this_key in prior.keys():
+            try:
+                self.__setattr__(this_key + "-prior", prior[this_key])
+            except Exception:
+                continue
+        pass
+
+    def reconstruct_waveforms(self):
+        """
+        Reconstruct waveforms from the posterior samples.
+        """
+        raise NotImplementedError("Bilby waveform reconstruction not implemented yet.")
+
+    def draw_from_prior(self, n_samples=1000):
+        """
+        Draw samples from the prior.
+        n_samples: number of samples to draw
+        """
+        raise NotImplementedError("Bilby prior sampling not implemented yet.")
+
+
+class RIFTPosterior(Posterior):
+    def __init__(self, filename):
+        """
+        Initialize the RIFTPosterior class.
+        filename: name of the file containing the posterior samples
+        kind: type of the file (rift)
+        """
+        super().__init__(filename)
+        self.load_rift(filename)
+        pass
+
+    def load_rift(self, filename):
+        with open(filename, "r") as f:
+            data = np.genfromtxt(f, names=True)
+
+        # m1 m2 a1x a1y a1z a2x a2y a2z mc eta  ra dec time phiorb incl psi
+        # distance Npts lnL p ps neff  mtotal q chi_eff chi_p  m1_source m2_source mc_source
+        # mtotal_source redshift  eccentricity meanPerAno
+        # rift to bilby
+        rift_to_bilby = {
+            "m1": "mass_1",
+            "m2": "mass_2",
+            "a1x": "spin_1x",
+            "a1y": "spin_1y",
+            "a1z": "spin_1z",
+            "a2x": "spin_2x",
+            "a2y": "spin_2y",
+            "a2z": "spin_2z",
+            "mc": "chirp_mass",
+            "eta": "symmetric_mass_ratio",  # CHECKME
+            "ra": "ra",
+            "dec": "dec",
+            "time": "geocent_time",
+            "phiorb": "phase",
+            "incl": "iota",
+            "psi": "psi",
+            "distance": "luminosity_distance",
+            "Npts": "npts",
+            "lnL": "log_likelihood",
+            "p": "p",
+            "ps": "ps",
+            "neff": "neff",
+            "mtotal": "total_mass",
+            "q": "mass_ratio",
+            "chi_eff": "chi_eff",
+            "chi_p": "chi_p",
+            "m1_source": "mass_1_source",
+            "m2_source": "mass_2_source",
+            "mc_source": "chirp_mass_source",
+            "mtotal_source": "total_mass_source",
+            "redshift": "redshift",
+            "eccentricity": "eccentricity",
+            "meanPerAno": "mean_per_ano",
+        }
+
+        for name in data.dtype.names:
+            try:
+                self.__setattr__(rift_to_bilby[name], data[name])
+            except Exception:
+                logging.warning("Problem with key: ", name)
+                continue
+                # print(f"Key {name} not found in {filename}")
+
+        pass
+
+    def reconstruct_waveforms(self):
+        """
+        Reconstruct waveforms from the posterior samples.
+        """
+        raise NotImplementedError("RIFT waveform reconstruction not implemented yet.")
+
+    def draw_from_prior(self, n_samples=1000):
+        """
+        Draw samples from the prior.
+        n_samples: number of samples to draw
+        """
+        raise NotImplementedError("RIFT prior sampling not implemented yet.")
 
 
 def make_corner_plot(
@@ -507,6 +448,7 @@ def make_corner_plot(
 
     return fig, axes
 
+
 def prior_from_file(fname):
     prior_dict = BBHPriorDict({})
     prior_dict.from_file(fname)
@@ -524,7 +466,7 @@ def sample_from_prior(fname, n_samples=1000):
     )
     samples["mass_2"] = samples["mass_1"] * samples["mass_ratio"]
 
-    samples["chi_p"] = np.vectorize(compute_chi_prec)(
+    samples["chi_p"] = np.vectorize(gwutils.compute_chi_prec)(
         samples["mass_1"],
         samples["mass_2"],
         samples["a_1"],
@@ -574,8 +516,8 @@ keys_latex = {
     "delta_Mbhf": r"$\delta M_{\rm BH}^f$",
     "delta_a6c": r"$\delta a_6^c$",
     "delta_cN3LO": r"$\delta c_{\rm{N}^3\rm{LO}}$",
-    "geocent_time": r'$t_c$',
-    "log_likelihood": r'$\log \mathcal{L}$',
+    "geocent_time": r"$t_c$",
+    "log_likelihood": r"$\log \mathcal{L}$",
 }
 
 if __name__ == "__main__":
