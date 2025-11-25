@@ -1,5 +1,5 @@
 """
-Pytest configuration and fixtures for gwpe-plotting-tools tests.
+Pytest configuration and fixtures for gwpe_plotting_tools tests.
 """
 
 import os

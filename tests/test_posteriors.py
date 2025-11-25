@@ -42,9 +42,11 @@ class TestRIFTPosterior:
         posterior = RIFTPosterior(sample_rift_file)
         
         # Check mass values are positive and in expected range
+        # Allow some tolerance for m1 >= m2 due to random sampling
+        mass_tolerance = 5.0  # tolerance in solar masses
         assert np.all(posterior.mass_1 > 0)
         assert np.all(posterior.mass_2 > 0)
-        assert np.all(posterior.mass_1 >= posterior.mass_2 - 5)  # Allow some variation
+        assert np.all(posterior.mass_1 >= posterior.mass_2 - mass_tolerance)
 
     def test_sample_count(self, sample_rift_file, sample_rift_posterior_data):
         """Test that correct number of samples are loaded."""
