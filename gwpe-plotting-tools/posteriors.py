@@ -28,18 +28,38 @@ plt.rc("font", family="serif", size=13)
 class Posterior(ABC):
     """
     Abstract base class for posterior sample handling.
-    
+
     Subclasses must implement the `load` method to load posterior
     samples from their respective file formats.
     """
 
     def __init__(self, filename):
+        """
+        Initialize the Posterior.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the posterior samples file.
+        """
         self.filename = filename
         self.load(filename)
 
     @abstractmethod
     def load(self, filename):
-        """Load posterior samples from file."""
+        """
+        Load posterior samples from file.
+
+        This method must be implemented by subclasses to handle
+        loading posterior samples from their specific file formats.
+        After loading, posterior parameter samples should be set as
+        instance attributes (e.g., self.mass_1, self.chi_eff, etc.).
+
+        Parameters
+        ----------
+        filename : str
+            Path to the posterior samples file.
+        """
         pass
 
     def make_hist(
@@ -263,7 +283,7 @@ class BilbyPosterior(Posterior):
     def load(self, filename):
         """
         Load posterior samples from a bilby result file.
-        
+
         Parameters
         ----------
         filename : str
@@ -286,14 +306,14 @@ class BilbyPosterior(Posterior):
         for this_key in posterior.keys():
             try:
                 self.__setattr__(this_key, posterior[this_key])
-            except Exception:
-                continue
+            except (KeyError, AttributeError) as e:
+                logging.debug("Could not set posterior key %s: %s", this_key, e)
 
         for this_key in prior.keys():
             try:
                 self.__setattr__(this_key + "-prior", prior[this_key])
-            except Exception:
-                continue
+            except (KeyError, AttributeError) as e:
+                logging.debug("Could not set prior key %s: %s", this_key, e)
 
     def reconstruct_waveforms(self):
         """
