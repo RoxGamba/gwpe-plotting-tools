@@ -2,13 +2,17 @@
 Useful functions for plotting results of PE.
 """
 
-from scipy.stats import gaussian_kde
+from abc import ABC, abstractmethod
 import logging
-import numpy as np
-import matplotlib.pyplot as plt
-import gwutils
+
 import corner
+import matplotlib.pyplot as plt
+import numpy as np
 from pesummary.core.plots.publication import _triangle_plot, _triangle_axes
+from scipy.stats import gaussian_kde
+
+from .constants import KEYS_LATEX, RIFT_TO_BILBY
+from . import gwutils
 
 try:
     from bilby.gw.prior import BBHPriorDict
@@ -21,9 +25,41 @@ plt.rc("text", usetex=True)
 plt.rc("font", family="serif", size=13)
 
 
-class Posterior(object):
+class Posterior(ABC):
+    """
+    Abstract base class for posterior sample handling.
+
+    Subclasses must implement the `load` method to load posterior
+    samples from their respective file formats.
+    """
+
     def __init__(self, filename):
+        """
+        Initialize the Posterior.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the posterior samples file.
+        """
         self.filename = filename
+        self.load(filename)
+
+    @abstractmethod
+    def load(self, filename):
+        """
+        Load posterior samples from file.
+
+        This method must be implemented by subclasses to handle
+        loading posterior samples from their specific file formats.
+        After loading, posterior parameter samples should be set as
+        instance attributes (e.g., self.mass_1, self.chi_eff, etc.).
+
+        Parameters
+        ----------
+        filename : str
+            Path to the posterior samples file.
+        """
         pass
 
     def make_hist(
@@ -140,7 +176,7 @@ class Posterior(object):
 
         rand_idx = np.random.choice(range(len(self.__getattribute__(keys[0]))), N)
         posts = [np.array(self.__getattribute__(key))[rand_idx] for key in keys]
-        labels = [keys_latex[key] for key in keys]
+        labels = [KEYS_LATEX[key] for key in keys]
         fig, ax1, ax2, ax3 = _triangle_plot(
             x=posts[0],
             y=posts[1],
@@ -201,7 +237,7 @@ class Posterior(object):
         """
 
         matrix = np.transpose([self.__getattribute__(key) for key in keys])
-        labels = [keys_latex[key] for key in keys]
+        labels = [KEYS_LATEX[key] for key in keys]
 
         fig, axes = make_corner_plot(
             matrix,
@@ -238,18 +274,21 @@ class Posterior(object):
 
 
 class BilbyPosterior(Posterior):
-    def __init__(self, filename):
-        """
-        Initialize the BilbyPosterior class.
-        filename: name of the file containing the posterior samples
-        kind: type of the file (bilby-json, bilby-hdf5, bilby-pkl, o3a-hdf5)
-        """
-        super().__init__(filename)
-        self.load(filename)
-        pass
+    """
+    Posterior class for bilby result files.
+    
+    Supports loading from JSON, HDF5, and pickle file formats.
+    """
 
-    def load_bilby(self, filename):
+    def load(self, filename):
+        """
+        Load posterior samples from a bilby result file.
 
+        Parameters
+        ----------
+        filename : str
+            Path to the bilby result file (.json, .hdf5, or .pkl)
+        """
         if "json" in filename:
             result = CBCResult.from_json(filename)
         elif "hdf5" in filename:
@@ -267,16 +306,14 @@ class BilbyPosterior(Posterior):
         for this_key in posterior.keys():
             try:
                 self.__setattr__(this_key, posterior[this_key])
-            except Exception:
-                continue
-                # print(f"Key {this_key} not found in {filename}")
+            except (KeyError, AttributeError) as e:
+                logging.debug("Could not set posterior key %s: %s", this_key, e)
 
         for this_key in prior.keys():
             try:
                 self.__setattr__(this_key + "-prior", prior[this_key])
-            except Exception:
-                continue
-        pass
+            except (KeyError, AttributeError) as e:
+                logging.debug("Could not set prior key %s: %s", this_key, e)
 
     def reconstruct_waveforms(self):
         """
@@ -293,69 +330,29 @@ class BilbyPosterior(Posterior):
 
 
 class RIFTPosterior(Posterior):
-    def __init__(self, filename):
-        """
-        Initialize the RIFTPosterior class.
-        filename: name of the file containing the posterior samples
-        kind: type of the file (rift)
-        """
-        super().__init__(filename)
-        self.load_rift(filename)
-        pass
+    """
+    Posterior class for RIFT result files.
+    
+    Loads posterior samples from RIFT extrinsic_posterior_samples.dat files.
+    """
 
-    def load_rift(self, filename):
+    def load(self, filename):
+        """
+        Load posterior samples from a RIFT result file.
+        
+        Parameters
+        ----------
+        filename : str
+            Path to the RIFT posterior samples file
+        """
         with open(filename, "r") as f:
             data = np.genfromtxt(f, names=True)
 
-        # m1 m2 a1x a1y a1z a2x a2y a2z mc eta  ra dec time phiorb incl psi
-        # distance Npts lnL p ps neff  mtotal q chi_eff chi_p  m1_source m2_source mc_source
-        # mtotal_source redshift  eccentricity meanPerAno
-        # rift to bilby
-        rift_to_bilby = {
-            "m1": "mass_1",
-            "m2": "mass_2",
-            "a1x": "spin_1x",
-            "a1y": "spin_1y",
-            "a1z": "spin_1z",
-            "a2x": "spin_2x",
-            "a2y": "spin_2y",
-            "a2z": "spin_2z",
-            "mc": "chirp_mass",
-            "eta": "symmetric_mass_ratio",  # CHECKME
-            "ra": "ra",
-            "dec": "dec",
-            "time": "geocent_time",
-            "phiorb": "phase",
-            "incl": "iota",
-            "psi": "psi",
-            "distance": "luminosity_distance",
-            "Npts": "npts",
-            "lnL": "log_likelihood",
-            "p": "p",
-            "ps": "ps",
-            "neff": "neff",
-            "mtotal": "total_mass",
-            "q": "mass_ratio",
-            "chi_eff": "chi_eff",
-            "chi_p": "chi_p",
-            "m1_source": "mass_1_source",
-            "m2_source": "mass_2_source",
-            "mc_source": "chirp_mass_source",
-            "mtotal_source": "total_mass_source",
-            "redshift": "redshift",
-            "eccentricity": "eccentricity",
-            "meanPerAno": "mean_per_ano",
-        }
-
         for name in data.dtype.names:
-            try:
-                self.__setattr__(rift_to_bilby[name], data[name])
-            except Exception:
-                logging.warning("Problem with key: ", name)
-                continue
-                # print(f"Key {name} not found in {filename}")
-
-        pass
+            if name in RIFT_TO_BILBY:
+                self.__setattr__(RIFT_TO_BILBY[name], data[name])
+            else:
+                logging.warning("Unknown RIFT parameter: %s", name)
 
     def reconstruct_waveforms(self):
         """
@@ -390,7 +387,7 @@ def make_corner_plot(
     if truth_color is None:
         truth_color = color
 
-    if fig == None:
+    if fig is None:
         fig = cornerfig = corner.corner(
             matrix,
             labels=labels,
@@ -483,42 +480,29 @@ def sample_from_prior(fname, n_samples=1000):
     return samples
 
 
-keys_latex = {
-    "mass_ratio": r"$1/q$",
-    "chirp_mass": r"$\mathcal{M}_c [M_{\odot}]$",
-    "total_mass": r"$M [M_{\odot}]$",
-    "mass_1": r"$m_1 [M_{\odot}]$",
-    "mass_2": r"$m_2 [M_{\odot}]$",
-    "symmetric_mass_ratio": r"$\nu$",
-    "chi_1": r"$\chi_1$",
-    "chi_2": r"$\chi_2$",
-    "luminosity_distance": r"$d_L$ [Mpc]",
-    "iota": r"$\iota$ [rad]",
-    "dec": r"$\delta [rad]$",
-    "ra": r"$\alpha [rad]$",
-    "psi": r"$\psi [rad]$",
-    "phase": r"$\phi [rad]$",
-    "chi_eff": r"$\chi_{\rm eff}$",
-    "chi_p": r"$\chi_{\rm p}$",
-    "eccentricity": r"$e_{\rm 20 Hz}$",
-    "mean_per_ano": r"$\zeta_{\rm 20 Hz}$ [rad]",
-    "eccentricity_gw": r"$e_{\rm 20 Hz}^{\rm GW}$",
-    "mean_per_ano_gw": r"$\zeta_{\rm 20 Hz}^{\rm GW}$ [rad]",
-    "theta_jn": r"$\theta_{\rm JN}$",
-    "cos_theta_jn": r"$\cos(\theta_{\rm JN})$",
-    # "delta_alphalm0": r"$\delta \alpha_{\ell m 0}$",
-    "delta_alphalm0": r"$\delta \alpha_{220}$",
-    # "delta_taulm0": r"$\delta \tau_{\ell m 0}$",
-    # "delta_omglm0": r"$\delta \omega_{\ell m 0}$",
-    "delta_taulm0": r"$\delta \tau_{220}$",
-    "delta_omglm0": r"$\delta \omega_{220}$",
-    "delta_abhf": r"$\delta a_{\rm BH}^f$",
-    "delta_Mbhf": r"$\delta M_{\rm BH}^f$",
-    "delta_a6c": r"$\delta a_6^c$",
-    "delta_cN3LO": r"$\delta c_{\rm{N}^3\rm{LO}}$",
-    "geocent_time": r"$t_c$",
-    "log_likelihood": r"$\log \mathcal{L}$",
-}
+def create_posterior(filename, kind):
+    """
+    Factory function to create the appropriate Posterior subclass.
+    
+    Parameters
+    ----------
+    filename : str
+        Path to the posterior samples file
+    kind : str
+        Type of file: 'bilby-json', 'bilby-hdf5', 'bilby-pkl', or 'rift'
+    
+    Returns
+    -------
+    Posterior
+        An instance of BilbyPosterior or RIFTPosterior
+    """
+    if kind in ["bilby-json", "bilby-hdf5", "bilby-pkl"]:
+        return BilbyPosterior(filename)
+    elif kind == "rift":
+        return RIFTPosterior(filename)
+    else:
+        raise ValueError(f"Unknown file kind: {kind}")
+
 
 if __name__ == "__main__":
 
@@ -530,7 +514,7 @@ if __name__ == "__main__":
         "--kind",
         type=str,
         default="bilby-json",
-        help="File kind: bilby-json, bilby-hdf5, bilby-pkl, o3a-hdf5, gwtc1, rift",
+        help="File kind: bilby-json, bilby-hdf5, bilby-pkl, rift",
     )
     parser.add_argument("--key1", type=str, default="mass_1", help="First key to plot")
     parser.add_argument("--key2", type=str, default="mass_2", help="Second key to plot")
@@ -543,22 +527,16 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if args.kind not in [
-        "bilby-json",
-        "bilby-hdf5",
-        "bilby-pkl",
-        "o3a-hdf5",
-        "gwtc1",
-        "rift",
-    ]:
+    if args.kind not in ["bilby-json", "bilby-hdf5", "bilby-pkl", "rift"]:
         raise ValueError("Unknown file kind")
 
     if not (args.test_triangle or args.test_corner or args.test_sd):
         raise ValueError(
-            "Please specify at least one test to run: --test-triangle, --test-corner, --test-sd"
+            "Please specify at least one test to run: "
+            "--test-triangle, --test-corner, --test-sd"
         )
 
-    post = Posterior(args.fname, args.kind)
+    post = create_posterior(args.fname, args.kind)
     if args.test_corner:
         lim_key1 = [
             min(post.__getattribute__(args.key1)),
