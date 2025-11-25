@@ -1,12 +1,12 @@
 """
-Logging configuration for gwpe-plotting-tools
+Logging configuration for gwpe_plotting_tools
 
 This module provides a simple logging configuration that can be used
-throughout gwpe-plotting-tools.
+throughout gwpe_plotting_tools.
 Users can call setup_logging() to configure logging for the entire package.
 
 Example usage:
-    from gwpe-plotting-tools.logging_config import setup_logging
+    from gwpe_plotting_tools.logging_config import setup_logging
 
     # Setup logging with default INFO level
     setup_logging()
@@ -20,7 +20,7 @@ import logging
 
 def setup_logging(level="INFO", format_string=None, datefmt=None):
     """
-    Setup logging configuration for PyART
+    Setup logging configuration for gwpe_plotting_tools
 
     Parameters
     ----------
@@ -36,7 +36,7 @@ def setup_logging(level="INFO", format_string=None, datefmt=None):
 
     Example
     -------
-    >>> from gwpe-plotting-tools.logging_config import setup_logging
+    >>> from gwpe_plotting_tools.logging_config import setup_logging
     >>> setup_logging(level='INFO')
     >>> import logging
     >>> logging.info("This is an info message")
