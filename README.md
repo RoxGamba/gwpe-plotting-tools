@@ -1,5 +1,9 @@
 # Plotting tools for GW pe pipelines
 
+This package offers minimal utilities to:
+- handle GW posteriors data from bilby and RIFT
+- produce publication-level plots
+
 ## Installation
 
 To install the package:
