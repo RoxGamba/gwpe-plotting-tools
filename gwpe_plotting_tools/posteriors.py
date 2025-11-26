@@ -276,7 +276,7 @@ class Posterior(ABC):
 class BilbyPosterior(Posterior):
     """
     Posterior class for bilby result files.
-    
+
     Supports loading from JSON, HDF5, and pickle file formats.
     """
 
@@ -301,6 +301,7 @@ class BilbyPosterior(Posterior):
         posterior = result.posterior
         prior = result.priors
 
+        self.bilby_result = result
         self.log_bayes_factor = result.log_bayes_factor
 
         for this_key in posterior.keys():
@@ -315,11 +316,31 @@ class BilbyPosterior(Posterior):
             except (KeyError, AttributeError) as e:
                 logging.debug("Could not set prior key %s: %s", this_key, e)
 
-    def reconstruct_waveforms(self):
+    def reconstruct_waveforms(self, ifos=None, save=False):
         """
         Reconstruct waveforms from the posterior samples.
         """
-        raise NotImplementedError("Bilby waveform reconstruction not implemented yet.")
+
+        if ifos is None:
+            try:
+                ifos = self.bilby_result.interferometers
+            except AttributeError:
+                logging.warning(
+                    "No interferometers found in bilby result; we will not plot the data and"
+                    " will assume H1, L1, V1 for waveform reconstruction."
+                )
+                ifos = ["H1", "L1", "V1"]
+
+        figs = {}
+        for ifo in ifos:
+            ifo_fig = self.bilby_result.plot_interferometer_waveform_posterior(
+                interferometer=ifo,
+                n_samples=500,
+                save=save,
+            )
+            figs[ifo] = ifo_fig
+
+        return figs
 
     def draw_from_prior(self, n_samples=1000):
         """
@@ -332,14 +353,14 @@ class BilbyPosterior(Posterior):
 class RIFTPosterior(Posterior):
     """
     Posterior class for RIFT result files.
-    
+
     Loads posterior samples from RIFT extrinsic_posterior_samples.dat files.
     """
 
     def load(self, filename):
         """
         Load posterior samples from a RIFT result file.
-        
+
         Parameters
         ----------
         filename : str
@@ -483,14 +504,14 @@ def sample_from_prior(fname, n_samples=1000):
 def create_posterior(filename, kind):
     """
     Factory function to create the appropriate Posterior subclass.
-    
+
     Parameters
     ----------
     filename : str
         Path to the posterior samples file
     kind : str
         Type of file: 'bilby-json', 'bilby-hdf5', 'bilby-pkl', or 'rift'
-    
+
     Returns
     -------
     Posterior
