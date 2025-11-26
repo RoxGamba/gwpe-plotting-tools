@@ -42,6 +42,29 @@ RIFT_TO_BILBY = {
     "meanPerAno": "mean_per_ano",
 }
 
+BAJES_TO_BILBY = {
+    "mchirp": "chirp_mass",
+    "q": "mass_ratio",
+    "s1x": "spin_1x",
+    "s1y": "spin_1y",
+    "s1z": "spin_1z",
+    "s2x": "spin_2x",
+    "s2y": "spin_2y",
+    "s2z": "spin_2z",
+    "lambda1": "lambda_1",  # double check
+    "lambda2": "lambda_2",  # double check
+    "energy": "energy",  # to be confirmed with rift
+    "angmom": "angular_momentum",  # to be confirmed with rift
+    "cosi": "cos_iota",
+    "phi_ref": "phase",
+    "psi": "psi",
+    "ra": "ra",
+    "dec": "dec",
+    "distance": "luminosity_distance",
+    "time_shift": "time_shift",  # Not sure this has a bilby equivalent!
+    "logL": "log_likelihood",
+}
+
 # Extended mapping including additional parameters from MDC files
 MDC_TO_BILBY = {
     **RIFT_TO_BILBY,
@@ -68,6 +91,8 @@ KEYS_LATEX = {
     "chi_1": r"$\chi_1$",
     "chi_2": r"$\chi_2$",
     "luminosity_distance": r"$d_L$ [Mpc]",
+    "lambda_1": r"$\Lambda_1$",
+    "lambda_2": r"$\Lambda_2$",
     "iota": r"$\iota$ [rad]",
     "dec": r"$\delta [rad]$",
     "ra": r"$\alpha [rad]$",

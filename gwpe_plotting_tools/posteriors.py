@@ -11,7 +11,7 @@ import numpy as np
 from pesummary.core.plots.publication import _triangle_plot, _triangle_axes
 from scipy.stats import gaussian_kde
 
-from .constants import KEYS_LATEX, RIFT_TO_BILBY
+from .constants import KEYS_LATEX, RIFT_TO_BILBY, BAJES_TO_BILBY
 from . import gwutils
 
 try:
@@ -273,6 +273,50 @@ class Posterior(ABC):
         return fig, axes
 
 
+class BaJesPosterior(Posterior):
+    """
+    Posterior class for BaJes result files.
+
+    Loads posterior samples from BaJes output files.
+
+    Parameters
+    ----------
+    """
+
+    def load(self, filename):
+        """
+        Load posterior samples from a BaJes result file.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the BaJes posterior samples file
+        """
+        data = np.loadtxt(filename, names=True)
+        header = data.dtype.names
+
+        for name in header:
+            if name in BAJES_TO_BILBY:
+                self.__setattr__(BAJES_TO_BILBY[name], data[name])
+            else:
+                logging.warning("Unknown RIFT parameter: %s", name)
+
+        # TODO: load log_bayes_factor if available
+
+    def reconstruct_waveforms(self):
+        """
+        Reconstruct waveforms from the posterior samples.
+        """
+        raise NotImplementedError("BaJes waveform reconstruction not implemented yet.")
+
+    def draw_from_prior(self, n_samples=1000):
+        """
+        Draw samples from the prior.
+        n_samples: number of samples to draw
+        """
+        raise NotImplementedError("BaJes prior sampling not implemented yet.")
+
+
 class BilbyPosterior(Posterior):
     """
     Posterior class for bilby result files.
@@ -529,6 +573,8 @@ def create_posterior(filename, kind):
         return BilbyPosterior(filename)
     elif kind == "rift":
         return RIFTPosterior(filename)
+    elif kind == "bajes":
+        return BaJesPosterior(filename)
     else:
         raise ValueError(f"Unknown file kind: {kind}")
 
