@@ -610,8 +610,8 @@ def create_posterior(filename, kind):
         raise ValueError(f"Unknown file kind: {kind}")
 
 
-def single_color_cmap(hex_color, name="custom_cmap", white_at_start=True):
-    rgb = to_rgb(hex_color)
+def single_color_cmap(color, name="custom_cmap", white_at_start=True):
+    rgb = to_rgb(color)
     if white_at_start:
         colors = [(1, 1, 1), rgb]  # white → color
     else:
