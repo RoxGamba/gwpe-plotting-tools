@@ -22,14 +22,14 @@ class TestRIFTPosterior:
     def test_load_from_file(self, sample_rift_file):
         """Test loading posterior from RIFT file."""
         posterior = RIFTPosterior(sample_rift_file)
-        
+
         # Should have filename attribute
         assert posterior.filename == sample_rift_file
 
     def test_parameters_renamed(self, sample_rift_file):
         """Test that parameters are renamed from RIFT to bilby convention."""
         posterior = RIFTPosterior(sample_rift_file)
-        
+
         # Check renamed parameters exist
         assert hasattr(posterior, "mass_1")
         assert hasattr(posterior, "mass_2")
@@ -40,7 +40,7 @@ class TestRIFTPosterior:
     def test_mass_values_reasonable(self, sample_rift_file):
         """Test that loaded mass values are reasonable."""
         posterior = RIFTPosterior(sample_rift_file)
-        
+
         # Check mass values are positive and in expected range
         # Allow some tolerance for m1 >= m2 due to random sampling
         mass_tolerance = 5.0  # tolerance in solar masses
@@ -52,20 +52,20 @@ class TestRIFTPosterior:
         """Test that correct number of samples are loaded."""
         posterior = RIFTPosterior(sample_rift_file)
         expected_count = len(sample_rift_posterior_data["m1"])
-        
+
         assert len(posterior.mass_1) == expected_count
 
     def test_reconstruct_waveforms_not_implemented(self, sample_rift_file):
         """Test that waveform reconstruction raises NotImplementedError."""
         posterior = RIFTPosterior(sample_rift_file)
-        
+
         with pytest.raises(NotImplementedError):
             posterior.reconstruct_waveforms()
 
     def test_draw_from_prior_not_implemented(self, sample_rift_file):
         """Test that prior sampling raises NotImplementedError."""
         posterior = RIFTPosterior(sample_rift_file)
-        
+
         with pytest.raises(NotImplementedError):
             posterior.draw_from_prior()
 
@@ -77,14 +77,14 @@ class TestPosteriorBase:
         """Test finding maximum likelihood sample."""
         posterior = RIFTPosterior(sample_rift_file)
         maxL_params = posterior.find_maxL()
-        
+
         # Should return a dictionary
         assert isinstance(maxL_params, dict)
-        
+
         # Should contain mass parameters
         assert "mass_1" in maxL_params
         assert "mass_2" in maxL_params
-        
+
         # Should contain a scalar value
         assert isinstance(maxL_params["mass_1"], (float, np.floating))
 
@@ -92,10 +92,10 @@ class TestPosteriorBase:
         """Test that maxL sample corresponds to actual maximum likelihood."""
         posterior = RIFTPosterior(sample_rift_file)
         maxL_params = posterior.find_maxL()
-        
+
         # Find index of max log_likelihood manually
         max_idx = np.argmax(posterior.log_likelihood)
-        
+
         # Check that the mass values match
         assert maxL_params["mass_1"] == posterior.mass_1[max_idx]
         assert maxL_params["mass_2"] == posterior.mass_2[max_idx]
@@ -104,10 +104,10 @@ class TestPosteriorBase:
         """Test histogram creation."""
         posterior = RIFTPosterior(sample_rift_file)
         fig = posterior.make_hist("mass_1", color="blue")
-        
+
         # Should return a figure
         assert fig is not None
-        
+
         # Clean up
         matplotlib_backend.close(fig)
 
@@ -122,10 +122,10 @@ class TestPosteriorBase:
             truth=30.0,
             percentiles=[5, 95],
         )
-        
+
         # Should return a figure
         assert fig is not None
-        
+
         # Clean up
         matplotlib_backend.close(fig)
 
@@ -136,7 +136,7 @@ class TestCreatePosterior:
     def test_create_rift_posterior(self, sample_rift_file):
         """Test creating RIFT posterior via factory function."""
         posterior = create_posterior(sample_rift_file, "rift")
-        
+
         assert isinstance(posterior, RIFTPosterior)
 
     def test_create_unknown_kind_raises(self, sample_rift_file):
@@ -160,7 +160,7 @@ class TestCornerCompatibility:
     def test_make_corner_plot(self, sample_rift_file, matplotlib_backend):
         """Test corner plot creation with mock data."""
         posterior = RIFTPosterior(sample_rift_file)
-        
+
         # Define plot parameters
         keys = ["mass_1", "mass_2"]
         lim_mass1 = [
@@ -171,24 +171,24 @@ class TestCornerCompatibility:
             float(np.min(posterior.mass_2)),
             float(np.max(posterior.mass_2)),
         ]
-        
+
         fig, axes = posterior.make_corner_plot(
             keys,
             limits=[lim_mass1, lim_mass2],
             color="blue",
         )
-        
+
         # Should return figure and axes
         assert fig is not None
         assert axes is not None
-        
+
         # Clean up
         matplotlib_backend.close(fig)
 
     def test_make_corner_plot_with_truths(self, sample_rift_file, matplotlib_backend):
         """Test corner plot with truth values."""
         posterior = RIFTPosterior(sample_rift_file)
-        
+
         keys = ["mass_1", "mass_2"]
         lim_mass1 = [
             float(np.min(posterior.mass_1)),
@@ -198,16 +198,16 @@ class TestCornerCompatibility:
             float(np.min(posterior.mass_2)),
             float(np.max(posterior.mass_2)),
         ]
-        
+
         fig, axes = posterior.make_corner_plot(
             keys,
             limits=[lim_mass1, lim_mass2],
             color="red",
             truths=[30.0, 25.0],
         )
-        
+
         assert fig is not None
-        
+
         # Clean up
         matplotlib_backend.close(fig)
 
@@ -218,30 +218,32 @@ class TestPesummaryCompatibility:
     def test_make_triangle_plot(self, sample_rift_file, matplotlib_backend):
         """Test triangle plot creation with mock data."""
         posterior = RIFTPosterior(sample_rift_file)
-        
+
         keys = ["mass_1", "mass_2"]
-        
+
         fig, axes = posterior.make_triangle_plot(
             keys,
             color="blue",
             label="Test",
             N=50,  # Small N for faster test
         )
-        
+
         # Should return figure and axes
         assert fig is not None
         assert axes is not None
         assert len(axes) == 3  # ax1, ax2, ax3
-        
+
         # Clean up
         matplotlib_backend.close(fig)
 
-    def test_make_triangle_plot_with_options(self, sample_rift_file, matplotlib_backend):
+    def test_make_triangle_plot_with_options(
+        self, sample_rift_file, matplotlib_backend
+    ):
         """Test triangle plot with various options."""
         posterior = RIFTPosterior(sample_rift_file)
-        
+
         keys = ["mass_1", "mass_2"]
-        
+
         fig, axes = posterior.make_triangle_plot(
             keys,
             color="red",
@@ -253,8 +255,8 @@ class TestPesummaryCompatibility:
             percentiles=[5, 95],
             grid=True,
         )
-        
+
         assert fig is not None
-        
+
         # Clean up
         matplotlib_backend.close(fig)
