@@ -8,6 +8,42 @@ wave parameters such as the precessing spin parameter (chi_p).
 import numpy as np
 
 
+def compute_magnitude_and_tilt_from_components(
+    chi1_x, chi1_y, chi1_z, chi2_x, chi2_y, chi2_z
+):
+    """
+    Compute spin magnitudes and tilt angles from Cartesian components.
+
+    Parameters
+    ----------
+    chi1_x : float or ndarray
+        Primary spin x-component (dimensionless).
+    chi1_y : float or ndarray
+        Primary spin y-component (dimensionless).
+    chi1_z : float or ndarray
+        Primary spin z-component (dimensionless).
+    chi2_x : float or ndarray
+        Secondary spin x-component (dimensionless).
+    chi2_y : float or ndarray
+        Secondary spin y-component (dimensionless).
+    chi2_z : float or ndarray
+        Secondary spin z-component (dimensionless).
+    Returns
+    -------
+    dict of str to float or ndarray
+        Dictionary containing spin magnitudes ('a_1', 'a_2') and
+        cosine of tilt angles ('cos_tilt_1', 'cos_tilt_2').
+    """
+
+    a1 = np.sqrt(chi1_x**2 + chi1_y**2 + chi1_z**2)
+    a2 = np.sqrt(chi2_x**2 + chi2_y**2 + chi2_z**2)
+
+    cos_tilt1 = chi1_z / a1
+    cos_tilt2 = chi2_z / a2
+
+    return {"a_1": a1, "cos_tilt_1": cos_tilt1, "a_2": a2, "cos_tilt_2": cos_tilt2}
+
+
 def compute_chi_prec(m1, m2, s1, s2, tilt1, tilt2):
     """
     Compute the precessing spin parameter chi_p.

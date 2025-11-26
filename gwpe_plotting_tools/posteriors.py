@@ -307,6 +307,18 @@ class Posterior(ABC):
         """
 
         required = ["a_1", "a_2", "cos_tilt_1", "cos_tilt_2"]
+
+        # check that all required parameters are present, if not try to
+        # compute them from the component spins
+        for param in required:
+            if not hasattr(self, param):
+                logging.warning(
+                    f"Parameter {param} not found in posterior samples. "
+                    "Attempting to compute from spin components."
+                )
+                self.compute_spin_magnitudes_and_tilts()
+                break
+
         try:
             spins = [self.__getattribute__(param) for param in required]
         except AttributeError as e:
@@ -314,6 +326,7 @@ class Posterior(ABC):
                 "Could not make spin disk plot, missing required parameters: %s", e
             )
             return
+
         cmap = single_color_cmap(color)
         fig = spin_distribution_plots(
             required,
@@ -325,6 +338,34 @@ class Posterior(ABC):
             show_label=False,
         )
         return fig
+
+    def compute_spin_magnitudes_and_tilts(self):
+        """
+        Compute spin magnitudes and tilt angles from the spin components;
+        sets the attributes a_1, a_2, cos_tilt_1, cos_tilt_2.
+        """
+        chi1x, chi1y, chi1z, chi2z, chi2y, chi2z = [
+            self.__getattribute__(key)
+            for key in [
+                "spin_1x",
+                "spin_1y",
+                "spin_1z",
+                "spin_2x",
+                "spin_2y",
+                "spin_2z",
+            ]
+        ]
+        if any(spin is None for spin in [chi1x, chi1y, chi1z, chi2z, chi2y, chi2z]):
+            logging.error(
+                "Cannot compute required spin parameters; missing spin components."
+            )
+            return
+        spinpars = gwutils.compute_magnitude_and_tilt_from_components(
+            chi1x, chi1y, chi1z, chi2z, chi2y, chi2z
+        )
+        for key in spinpars:
+            self.__setattr__(key, spinpars[key])
+        pass
 
 
 class BaJesPosterior(Posterior):
@@ -353,7 +394,7 @@ class BaJesPosterior(Posterior):
             if name in BAJES_TO_BILBY:
                 self.__setattr__(BAJES_TO_BILBY[name], data[name])
             else:
-                logging.warning("Unknown RIFT parameter: %s", name)
+                logging.warning("Unknown BaJes parameter: %s", name)
 
         # TODO: load log_bayes_factor if available
 
