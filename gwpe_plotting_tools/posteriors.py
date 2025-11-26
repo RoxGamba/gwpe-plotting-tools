@@ -7,8 +7,14 @@ import logging
 
 import corner
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap, to_rgb
+
 import numpy as np
-from pesummary.core.plots.publication import _triangle_plot, _triangle_axes
+from pesummary.core.plots.publication import (
+    _triangle_plot,
+    _triangle_axes,
+)
+from pesummary.gw.plots.publication import spin_distribution_plots
 from scipy.stats import gaussian_kde
 
 from .constants import KEYS_LATEX, RIFT_TO_BILBY, BAJES_TO_BILBY
@@ -271,6 +277,31 @@ class Posterior(ABC):
                         )
 
         return fig, axes
+
+    def make_spindisk_plot(self, color="b", label=None, colorbar=False, annotate=False):
+        """
+        Make a spin disk plot for the posterior samples.
+        """
+
+        required = ["a_1", "a_2", "cos_tilt_1", "cos_tilt_2"]
+        try:
+            spins = [self.__getattribute__(param) for param in required]
+        except AttributeError as e:
+            logging.error(
+                "Could not make spin disk plot, missing required parameters: %s", e
+            )
+            return
+        cmap = single_color_cmap(color)
+        fig = spin_distribution_plots(
+            required,
+            spins,
+            label=label,
+            cmap=cmap,
+            annotate=annotate,
+            colorbar=colorbar,
+            show_label=False,
+        )
+        return fig
 
 
 class BaJesPosterior(Posterior):
@@ -577,6 +608,15 @@ def create_posterior(filename, kind):
         return BaJesPosterior(filename)
     else:
         raise ValueError(f"Unknown file kind: {kind}")
+
+
+def single_color_cmap(hex_color, name="custom_cmap", white_at_start=True):
+    rgb = to_rgb(hex_color)
+    if white_at_start:
+        colors = [(1, 1, 1), rgb]  # white → color
+    else:
+        colors = [(0, 0, 0), rgb]  # black → color
+    return LinearSegmentedColormap.from_list(name, colors)
 
 
 if __name__ == "__main__":
