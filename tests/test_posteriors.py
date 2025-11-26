@@ -13,7 +13,6 @@ from gwpe_plotting_tools.posteriors import (
     RIFTPosterior,
     create_posterior,
 )
-from gwpe_plotting_tools.constants import RIFT_TO_BILBY
 
 
 class TestRIFTPosterior:
@@ -260,3 +259,18 @@ class TestPesummaryCompatibility:
 
         # Clean up
         matplotlib_backend.close(fig)
+
+    def test_make_spindisk_plot(self, sample_rift_file, matplotlib_backend):
+        """Test spin disk plot creation with mock data."""
+        posterior = RIFTPosterior(sample_rift_file)
+
+        fig = posterior.make_spindisk_plot(color="green", label="Spin Disk Test")
+
+        # Should return figure
+        assert fig is not None
+
+        # Clean up
+        matplotlib_backend.close(fig)
+
+
+# The End

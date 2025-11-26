@@ -7,8 +7,14 @@ import logging
 
 import corner
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap, to_rgb
+
 import numpy as np
-from pesummary.core.plots.publication import _triangle_plot, _triangle_axes
+from pesummary.core.plots.publication import (
+    _triangle_plot,
+    _triangle_axes,
+)
+from pesummary.gw.plots.publication import spin_distribution_plots
 from scipy.stats import gaussian_kde
 
 from .constants import KEYS_LATEX, RIFT_TO_BILBY, BAJES_TO_BILBY
@@ -272,6 +278,95 @@ class Posterior(ABC):
 
         return fig, axes
 
+    def make_spindisk_plot(self, color="b", label=None, colorbar=False, annotate=False):
+        """
+        Generate a spin disk plot for the posterior samples, visualizing the spin magnitudes and tilt angles
+        of the two compact objects in a binary system. The plot shows the distribution of spin vectors projected
+        onto a disk, providing insight into the spin orientations and magnitudes inferred from the data.
+
+        Parameters
+        ----------
+        color : str, optional
+            Color for the spin disk plot (default: "b").
+        label : str or None, optional
+            Label for the plot legend (default: None).
+        colorbar : bool, optional
+            If True, display a colorbar indicating the density of samples (default: False).
+        annotate : bool, optional
+            If True, annotate the plot with additional information (default: False).
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure or None
+            The matplotlib figure object containing the spin disk plot, or None if required parameters are missing.
+
+        Example
+        -------
+        >>> fig = posterior.make_spindisk_plot(color="r", label="GW Event", colorbar=True, annotate=True)
+        >>> fig.savefig("spindisk_plot.png")
+        """
+
+        required = ["a_1", "a_2", "cos_tilt_1", "cos_tilt_2"]
+
+        # check that all required parameters are present, if not try to
+        # compute them from the component spins
+        for param in required:
+            if not hasattr(self, param):
+                logging.warning(
+                    f"Parameter {param} not found in posterior samples. "
+                    "Attempting to compute from spin components."
+                )
+                self.compute_spin_magnitudes_and_tilts()
+                break
+
+        try:
+            spins = [self.__getattribute__(param) for param in required]
+        except AttributeError as e:
+            logging.error(
+                "Could not make spin disk plot, missing required parameters: %s", e
+            )
+            return
+
+        cmap = single_color_cmap(color)
+        fig = spin_distribution_plots(
+            required,
+            spins,
+            label=label,
+            cmap=cmap,
+            annotate=annotate,
+            colorbar=colorbar,
+            show_label=False,
+        )
+        return fig
+
+    def compute_spin_magnitudes_and_tilts(self):
+        """
+        Compute spin magnitudes and tilt angles from the spin components;
+        sets the attributes a_1, a_2, cos_tilt_1, cos_tilt_2.
+        """
+        chi1x, chi1y, chi1z, chi2z, chi2y, chi2z = [
+            self.__getattribute__(key)
+            for key in [
+                "spin_1x",
+                "spin_1y",
+                "spin_1z",
+                "spin_2x",
+                "spin_2y",
+                "spin_2z",
+            ]
+        ]
+        if any(spin is None for spin in [chi1x, chi1y, chi1z, chi2z, chi2y, chi2z]):
+            logging.error(
+                "Cannot compute required spin parameters; missing spin components."
+            )
+            return
+        spinpars = gwutils.compute_magnitude_and_tilt_from_components(
+            chi1x, chi1y, chi1z, chi2z, chi2y, chi2z
+        )
+        for key in spinpars:
+            self.__setattr__(key, spinpars[key])
+        pass
+
 
 class BaJesPosterior(Posterior):
     """
@@ -299,7 +394,7 @@ class BaJesPosterior(Posterior):
             if name in BAJES_TO_BILBY:
                 self.__setattr__(BAJES_TO_BILBY[name], data[name])
             else:
-                logging.warning("Unknown RIFT parameter: %s", name)
+                logging.warning("Unknown BaJes parameter: %s", name)
 
         # TODO: load log_bayes_factor if available
 
@@ -577,6 +672,15 @@ def create_posterior(filename, kind):
         return BaJesPosterior(filename)
     else:
         raise ValueError(f"Unknown file kind: {kind}")
+
+
+def single_color_cmap(color, name="custom_cmap", white_at_start=True):
+    rgb = to_rgb(color)
+    if white_at_start:
+        colors = [(1, 1, 1), rgb]  # white → color
+    else:
+        colors = [(0, 0, 0), rgb]  # black → color
+    return LinearSegmentedColormap.from_list(name, colors)
 
 
 if __name__ == "__main__":
