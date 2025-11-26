@@ -10,7 +10,9 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
-    {name = "RoxGamba"}
+    {name = "Rossella Gamba"},
+    {name = "Danilo Chiaramello"},
+    {name = "Koustav Chandra"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
