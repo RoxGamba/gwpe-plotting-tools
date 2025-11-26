@@ -319,6 +319,14 @@ class BilbyPosterior(Posterior):
     def reconstruct_waveforms(self, ifos=None, save=False):
         """
         Reconstruct waveforms from the posterior samples.
+
+        Parameters
+        ----------
+        ifos : list, optional
+            List of interferometers to reconstruct waveforms for.
+            If None, will use all available interferometers in the bilby result.
+        save : bool, optional
+            Whether to save the waveform plots. Default is False.
         """
 
         if ifos is None:
