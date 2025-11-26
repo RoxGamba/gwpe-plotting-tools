@@ -11,7 +11,7 @@ from gwpe_plotting_tools.logging_config import setup_logging
 
 class TestSetupLogging:
     """Tests for setup_logging function.
-    
+
     Note: logging.basicConfig only works on the first call unless
     the root logger has no handlers. These tests verify the function
     interface rather than trying to reset logging state between tests.

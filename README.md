@@ -1,11 +1,41 @@
 # Plotting tools for GW pe pipelines
 
-To start:
+## Installation
+
+To install the package:
 ```bash
-$ pip install .
+pip install .
 ```
 
-# References
+For development, install with dev dependencies:
+```bash
+pip install -e ".[dev]"
+```
+
+## Development
+
+### Pre-commit Hooks
+
+This project uses pre-commit hooks to ensure code quality. Black is automatically run on commit to format code.
+
+To set up pre-commit hooks:
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+To run the hooks manually on all files:
+```bash
+pre-commit run --all-files
+```
+
+### Code Style
+
+This project uses:
+- **Black** for code formatting
+- **NumPy/Sphinx style** for docstrings
+
+## References
 This is largely a wrapper of `corner`, `pesummary` and (sometimes) `bilby`. If you this package, please cite these libraries:
 
 ```
