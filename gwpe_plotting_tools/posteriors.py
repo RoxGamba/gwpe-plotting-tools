@@ -280,7 +280,30 @@ class Posterior(ABC):
 
     def make_spindisk_plot(self, color="b", label=None, colorbar=False, annotate=False):
         """
-        Make a spin disk plot for the posterior samples.
+        Generate a spin disk plot for the posterior samples, visualizing the spin magnitudes and tilt angles
+        of the two compact objects in a binary system. The plot shows the distribution of spin vectors projected
+        onto a disk, providing insight into the spin orientations and magnitudes inferred from the data.
+
+        Parameters
+        ----------
+        color : str, optional
+            Color for the spin disk plot (default: "b").
+        label : str or None, optional
+            Label for the plot legend (default: None).
+        colorbar : bool, optional
+            If True, display a colorbar indicating the density of samples (default: False).
+        annotate : bool, optional
+            If True, annotate the plot with additional information (default: False).
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure or None
+            The matplotlib figure object containing the spin disk plot, or None if required parameters are missing.
+
+        Example
+        -------
+        >>> fig = posterior.make_spindisk_plot(color="r", label="GW Event", colorbar=True, annotate=True)
+        >>> fig.savefig("spindisk_plot.png")
         """
 
         required = ["a_1", "a_2", "cos_tilt_1", "cos_tilt_2"]
